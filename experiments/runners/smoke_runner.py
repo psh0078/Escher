@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from analysis.metrics.collector import MetricsCollector
 from core.simpy_engine import SimPyEngine
@@ -33,7 +34,106 @@ class SmokeScenario:
 
 def load_scenario(path: Path) -> SmokeScenario:
     payload = json.loads(path.read_text(encoding="utf-8"))
-    return SmokeScenario(**payload)
+    return parse_canonical_config(payload)
+
+
+def parse_canonical_config(payload: dict[str, Any]) -> SmokeScenario:
+    """Parse canonical experiment schema into the smoke scenario model."""
+    metadata = payload.get("simulation_metadata", {})
+    if not isinstance(metadata, dict):
+        raise ValueError("simulation_metadata must be an object")
+
+    duration = _required_float(metadata, "duration")
+    seed = _required_int(metadata, "seed")
+
+    workloads = payload.get("workloads", [])
+    if not isinstance(workloads, list):
+        raise ValueError("workloads must be a list")
+    constant = next((w for w in workloads if w.get("type") == "constant_rate"), None)
+    if constant is None:
+        raise ValueError("At least one constant_rate workload is required")
+    request_interval = _required_float(constant, "interval")
+
+    policies = payload.get("policies", {})
+    if not isinstance(policies, dict):
+        raise ValueError("policies must be an object")
+
+    retry_cfg = policies.get("retry", {})
+    if not isinstance(retry_cfg, dict):
+        raise ValueError("policies.retry must be an object")
+
+    breaker_cfg = policies.get("circuit_breaker", {})
+    if not isinstance(breaker_cfg, dict):
+        raise ValueError("policies.circuit_breaker must be an object")
+
+    limiter_cfg = policies.get("connection_limiter", {})
+    if not isinstance(limiter_cfg, dict):
+        raise ValueError("policies.connection_limiter must be an object")
+
+    delay = _first_delay_injection(payload)
+    dep_cfg = _resolve_dependency_config(payload)
+    dependency_failure_probability = float(dep_cfg.get("failure_probability", 0.0))
+
+    return SmokeScenario(
+        duration=duration,
+        request_interval=request_interval,
+        dependency_latency=float(delay.get("latency", 0.0)),
+        dependency_failure_probability=dependency_failure_probability,
+        outage_start=float(delay.get("start", duration + 1.0)),
+        outage_end=float(delay.get("end", duration + 1.0)),
+        retry_max_attempts=int(retry_cfg.get("max_attempts", 3)),
+        breaker_failure_threshold=float(breaker_cfg.get("failure_threshold", 0.5)),
+        breaker_window=float(breaker_cfg.get("rolling_window", 10.0)),
+        breaker_min_calls=int(breaker_cfg.get("min_calls", 10)),
+        breaker_open_timeout=float(breaker_cfg.get("open_timeout", 5.0)),
+        connection_limit=int(limiter_cfg.get("max_inflight", 100)),
+        seed=seed,
+    )
+
+
+def _required_float(payload: dict[str, Any], key: str) -> float:
+    if key not in payload:
+        raise ValueError(f"Missing required numeric field: {key}")
+    return float(payload[key])
+
+
+def _required_int(payload: dict[str, Any], key: str) -> int:
+    if key not in payload:
+        raise ValueError(f"Missing required integer field: {key}")
+    return int(payload[key])
+
+
+def _first_delay_injection(payload: dict[str, Any]) -> dict[str, Any]:
+    faultloads = payload.get("faultloads", [])
+    if not isinstance(faultloads, list):
+        raise ValueError("faultloads must be a list")
+    delay = next((f for f in faultloads if f.get("type") == "delay_injection"), None)
+    if delay is None:
+        return {}
+    if not isinstance(delay, dict):
+        raise ValueError("delay_injection entry must be an object")
+    return delay
+
+
+def _resolve_dependency_config(payload: dict[str, Any]) -> dict[str, Any]:
+    services = payload.get("services", [])
+    if not isinstance(services, list):
+        raise ValueError("services must be a list")
+
+    for service in services:
+        if not isinstance(service, dict):
+            continue
+        for operation in service.get("operations", []):
+            if not isinstance(operation, dict):
+                continue
+            dependencies = operation.get("dependencies", [])
+            if not isinstance(dependencies, list):
+                continue
+            if dependencies:
+                first = dependencies[0]
+                if isinstance(first, dict):
+                    return first
+    return {}
 
 
 def run_scenario(scenario: SmokeScenario) -> MetricsCollector:

@@ -1,6 +1,6 @@
 {
   "simulation_metadata": {
-    "name": "smoke-scenario",
+    "name": "v1-contract-smoke",
     "duration": 120.0,
     "seed": 42
   },
