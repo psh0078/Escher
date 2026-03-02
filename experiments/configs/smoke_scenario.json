@@ -1,0 +1,15 @@
+{
+  "duration": 120.0,
+  "request_interval": 0.5,
+  "dependency_latency": 0.2,
+  "dependency_failure_probability": 0.1,
+  "outage_start": 40.0,
+  "outage_end": 55.0,
+  "retry_max_attempts": 3,
+  "breaker_failure_threshold": 0.5,
+  "breaker_window": 10.0,
+  "breaker_min_calls": 12,
+  "breaker_open_timeout": 3.0,
+  "connection_limit": 100,
+  "seed": 42
+}

@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "escher-sim"
+version = "0.1.0"
+description = "Extensible resilience simulator with a SimPy backend"
+requires-python = ">=3.11"
+dependencies = [
+  "simpy>=4.1.1",
+]
+
+[tool.setuptools]
+package-dir = {"" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "model*", "experiments*", "analysis*"]
