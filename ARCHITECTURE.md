@@ -58,7 +58,8 @@ Resilience hooks are model-layer concerns and must never be moved into `core`.
   "simulation_metadata": {
     "name": "string",
     "duration": 120.0,
-    "seed": 42
+    "seed": 42,
+    "time_unit": "second"
   },
   "services": [],
   "workloads": [],
@@ -68,6 +69,9 @@ Resilience hooks are model-layer concerns and must never be moved into `core`.
 ```
 
 V1 execution may start with a reduced subset, but all new experiment features should converge to this shape.
+
+Current V1 execution support is sequential dependency traversal for operations.
+Current V1 faultload support includes delay injection and kill-instance events.
 
 ## Run Artifact Contract
 

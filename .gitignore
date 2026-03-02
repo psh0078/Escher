@@ -24,3 +24,6 @@ htmlcov/
 .DS_Store
 .idea/
 .vscode/
+
+# Local run artifacts
+analysis/metrics/smoke_run/

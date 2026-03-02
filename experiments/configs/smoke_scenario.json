@@ -2,7 +2,8 @@
   "simulation_metadata": {
     "name": "smoke-scenario",
     "duration": 120.0,
-    "seed": 42
+    "seed": 42,
+    "time_unit": "second"
   },
   "services": [
     {
@@ -15,7 +16,8 @@
             {
               "service": "service1",
               "operation": "calc",
-              "failure_probability": 0.1
+              "failure_probability": 0.1,
+              "latency": 0.15
             }
           ]
         }
@@ -27,6 +29,23 @@
       "operations": [
         {
           "name": "calc",
+          "dependencies": [
+            {
+              "service": "service2",
+              "operation": "db_lookup",
+              "failure_probability": 0.02,
+              "latency": 0.05
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "service2",
+      "instances": 1,
+      "operations": [
+        {
+          "name": "db_lookup",
           "dependencies": []
         }
       ]
@@ -46,6 +65,12 @@
       "start": 40.0,
       "end": 55.0,
       "latency": 0.2
+    },
+    {
+      "type": "kill_instance",
+      "target_service": "service1",
+      "instance_count": 1,
+      "at": 60.0
     }
   ],
   "policies": {
