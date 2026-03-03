@@ -27,6 +27,13 @@ class KillEvent:
 
 
 @dataclass(frozen=True)
+class SummonEvent:
+    service: str
+    instance_count: int
+    at_time: float
+
+
+@dataclass(frozen=True)
 class SmokeScenario:
     duration: float
     request_interval: float
@@ -34,6 +41,7 @@ class SmokeScenario:
     service_graph: ServiceGraph
     initial_instances: dict[str, int]
     kill_events: tuple[KillEvent, ...]
+    summon_events: tuple[SummonEvent, ...]
     delay_injections: dict[str, dict[str, float]]
     retry_max_attempts: int
     breaker_failure_threshold: float
@@ -88,6 +96,7 @@ def parse_canonical_config(payload: dict[str, Any]) -> SmokeScenario:
     service_graph = _build_service_graph(payload)
     initial_instances = _parse_initial_instances(payload)
     kill_events = _parse_kill_events(payload)
+    summon_events = _parse_summon_events(payload)
     delay_injections = _parse_delay_injections(payload)
     service_graph.get(target_operation_ref)
 
@@ -98,6 +107,7 @@ def parse_canonical_config(payload: dict[str, Any]) -> SmokeScenario:
         service_graph=service_graph,
         initial_instances=initial_instances,
         kill_events=kill_events,
+        summon_events=summon_events,
         delay_injections=delay_injections,
         retry_max_attempts=int(retry_cfg.get("max_attempts", 3)),
         breaker_failure_threshold=float(breaker_cfg.get("failure_threshold", 0.5)),
@@ -187,6 +197,29 @@ def _parse_kill_events(payload: dict[str, Any]) -> tuple[KillEvent, ...]:
     return tuple(sorted(events, key=lambda event: event.at_time))
 
 
+def _parse_summon_events(payload: dict[str, Any]) -> tuple[SummonEvent, ...]:
+    faultloads = payload.get("faultloads", [])
+    if not isinstance(faultloads, list):
+        raise ValueError("faultloads must be a list")
+
+    events: list[SummonEvent] = []
+    for faultload in faultloads:
+        if not isinstance(faultload, dict):
+            continue
+        if faultload.get("type") != "summon_instance":
+            continue
+
+        events.append(
+            SummonEvent(
+                service=_required_str(faultload, "target_service"),
+                instance_count=int(faultload.get("instance_count", 1)),
+                at_time=float(faultload.get("at", 0.0)),
+            )
+        )
+
+    return tuple(sorted(events, key=lambda event: event.at_time))
+
+
 def _build_service_graph(payload: dict[str, Any]) -> ServiceGraph:
     services = payload.get("services", [])
     if not isinstance(services, list):
@@ -254,6 +287,9 @@ def run_scenario(scenario: SmokeScenario) -> MetricsCollector:
         open_timeout=scenario.breaker_open_timeout,
     )
     limiter = ConnectionLimiter(max_inflight=scenario.connection_limit)
+    metrics.record_circuit_breaker_state(
+        "global", breaker.state.value, at_time=engine.now
+    )
 
     endpoint_cache: dict[str, DependencyEndpoint] = {}
 
@@ -267,8 +303,38 @@ def run_scenario(scenario: SmokeScenario) -> MetricsCollector:
 
         engine.schedule(event.at_time - engine.now, _apply_kill)
 
+    def schedule_summon_event(event: SummonEvent) -> None:
+        def _apply_summon() -> None:
+            if event.service not in active_instances:
+                return
+            new_count = active_instances[event.service] + max(0, event.instance_count)
+            active_instances[event.service] = new_count
+            metrics.record_instance_count(event.service, new_count, at_time=engine.now)
+
+        engine.schedule(event.at_time - engine.now, _apply_summon)
+
     for event in scenario.kill_events:
         schedule_kill_event(event)
+
+    for event in scenario.summon_events:
+        schedule_summon_event(event)
+
+    def breaker_allow_request() -> bool:
+        previous_state = breaker.state
+        allowed = breaker.allow_request(engine.now)
+        if breaker.state != previous_state:
+            metrics.record_circuit_breaker_state(
+                "global", breaker.state.value, at_time=engine.now
+            )
+        return allowed
+
+    def breaker_record(success: bool) -> None:
+        previous_state = breaker.state
+        breaker.record(engine.now, success)
+        if breaker.state != previous_state:
+            metrics.record_circuit_breaker_state(
+                "global", breaker.state.value, at_time=engine.now
+            )
 
     def endpoint_for(dependency: DependencySpec) -> DependencyEndpoint:
         key = dependency.target_ref
@@ -329,16 +395,22 @@ def run_scenario(scenario: SmokeScenario) -> MetricsCollector:
 
                 def attempt_dependency_call() -> None:
                     nonlocal attempts
-                    if not breaker.allow_request(engine.now):
+                    if not breaker_allow_request():
                         on_done(False)
                         return
 
                     endpoint = endpoint_for(dependency)
+                    call_started_at = engine.now
 
                     def on_transport_done(transport_success: bool) -> None:
                         nonlocal attempts
+                        metrics.record_endpoint_response_time(
+                            dependency.target_ref,
+                            latency=engine.now - call_started_at,
+                            completed_at=engine.now,
+                        )
                         if not transport_success:
-                            breaker.record(engine.now, False)
+                            breaker_record(False)
                             attempts += 1
                             if attempts > retry_policy.max_attempts:
                                 on_done(False)
@@ -349,7 +421,7 @@ def run_scenario(scenario: SmokeScenario) -> MetricsCollector:
 
                         def on_nested_complete(nested_success: bool) -> None:
                             nonlocal attempts
-                            breaker.record(engine.now, nested_success)
+                            breaker_record(nested_success)
                             if not nested_success:
                                 attempts += 1
                                 if attempts > retry_policy.max_attempts:

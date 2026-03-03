@@ -10,7 +10,7 @@ Escher is an extensible discrete-event simulator for resilience-aware microservi
 - Config-driven smoke scenario runner in `experiments/runners/smoke_runner.py`
 - Canonical experiment schema example in `experiments/configs/v1_contract_example.json`
 - Sequential service/operation dependency execution from canonical config
-- First-class `kill_instance` faultload support for service availability events
+- First-class `kill_instance` and `summon_instance` faultloads for service availability events
 - Determinism, edge-case, and stress tests in `tests/`
 
 ## Quick start
@@ -35,4 +35,12 @@ Each run writes reproducibility artifacts to `analysis/metrics/smoke_run/`:
   - `GEN_ALL_SuccessfulRequests.csv`
   - `GEN_ALL_FailedRequests.csv`
   - `R[All]_ResponseTimes.csv`
+  - `R[<EndpointRef>]_ResponseTimes.csv`
   - `S[<ServiceName>]_InstanceCount.csv`
+  - `CB[<BreakerName>]_StateTimeline.csv`
+
+For cross-tool output checks, compare Escher and MiSim CSV folders with:
+
+```bash
+python -m analysis.metrics.comparison analysis/metrics/smoke_run /path/to/misim/csv
+```

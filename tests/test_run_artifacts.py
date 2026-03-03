@@ -83,14 +83,16 @@ class RunArtifactsTests(unittest.TestCase):
             scenario = load_scenario(config_path)
             metrics = run_scenario(scenario)
             csv_paths = export_misim_compatible_csv(metrics, tmp_path)
-            self.assertEqual(len(csv_paths), 5)
+            self.assertEqual(len(csv_paths), 7)
 
             expected_names = {
                 "GEN_ALL_SuccessfulRequests.csv",
                 "GEN_ALL_FailedRequests.csv",
                 "R[All]_ResponseTimes.csv",
+                "R[service1.calc]_ResponseTimes.csv",
                 "S[gateway]_InstanceCount.csv",
                 "S[service1]_InstanceCount.csv",
+                "CB[global]_StateTimeline.csv",
             }
             self.assertEqual({path.name for path in csv_paths}, expected_names)
 

@@ -6,6 +6,73 @@ from experiments.runners.smoke_runner import parse_canonical_config, run_scenari
 
 
 class SmokeRunnerTests(unittest.TestCase):
+    def test_kill_and_summon_instance_faultloads_update_timeline(self) -> None:
+        scenario = parse_canonical_config(
+            {
+                "simulation_metadata": {
+                    "name": "kill-and-summon-smoke",
+                    "duration": 10.0,
+                    "seed": 11,
+                },
+                "services": [
+                    {
+                        "name": "gateway",
+                        "instances": 1,
+                        "operations": [
+                            {
+                                "name": "GET",
+                                "dependencies": [
+                                    {
+                                        "service": "service1",
+                                        "operation": "calc",
+                                        "failure_probability": 0.0,
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    {
+                        "name": "service1",
+                        "instances": 2,
+                        "operations": [{"name": "calc", "dependencies": []}],
+                    },
+                ],
+                "workloads": [
+                    {"type": "constant_rate", "target": "gateway.GET", "interval": 1.0}
+                ],
+                "faultloads": [
+                    {
+                        "type": "kill_instance",
+                        "target_service": "service1",
+                        "instance_count": 1,
+                        "at": 4.0,
+                    },
+                    {
+                        "type": "summon_instance",
+                        "target_service": "service1",
+                        "instance_count": 2,
+                        "at": 8.0,
+                    },
+                ],
+                "policies": {
+                    "retry": {"max_attempts": 1},
+                    "circuit_breaker": {
+                        "failure_threshold": 1.0,
+                        "rolling_window": 5.0,
+                        "min_calls": 1,
+                        "open_timeout": 1.0,
+                    },
+                    "connection_limiter": {"max_inflight": 10},
+                },
+            }
+        )
+
+        result = run_scenario(scenario)
+        self.assertEqual(
+            result.instance_count_log["service1"],
+            [(0.0, 2), (4.0, 1), (8.0, 3)],
+        )
+
     def test_deterministic_outputs_with_same_seed(self) -> None:
         scenario = parse_canonical_config(
             {

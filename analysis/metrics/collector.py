@@ -12,7 +12,13 @@ class MetricsCollector:
     latencies: list[float] = field(default_factory=list)
     completion_log: list[tuple[float, bool]] = field(default_factory=list)
     response_time_log: list[tuple[float, float]] = field(default_factory=list)
+    endpoint_response_time_log: dict[str, list[tuple[float, float]]] = field(
+        default_factory=dict
+    )
     instance_count_log: dict[str, list[tuple[float, int]]] = field(default_factory=dict)
+    circuit_breaker_state_log: dict[str, list[tuple[float, str]]] = field(
+        default_factory=dict
+    )
 
     def record(
         self, success: bool, latency: float, completed_at: float | None = None
@@ -68,3 +74,21 @@ class MetricsCollector:
         if service_name not in self.instance_count_log:
             self.instance_count_log[service_name] = []
         self.instance_count_log[service_name].append((at_time, count))
+
+    def record_endpoint_response_time(
+        self, endpoint_ref: str, latency: float, completed_at: float
+    ) -> None:
+        if endpoint_ref not in self.endpoint_response_time_log:
+            self.endpoint_response_time_log[endpoint_ref] = []
+        self.endpoint_response_time_log[endpoint_ref].append((completed_at, latency))
+
+    def record_circuit_breaker_state(
+        self, breaker_name: str, state: str, at_time: float
+    ) -> None:
+        if breaker_name not in self.circuit_breaker_state_log:
+            self.circuit_breaker_state_log[breaker_name] = []
+
+        state_log = self.circuit_breaker_state_log[breaker_name]
+        if state_log and state_log[-1][1] == state:
+            return
+        state_log.append((at_time, state))

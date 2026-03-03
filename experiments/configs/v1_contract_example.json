@@ -71,6 +71,12 @@
       "target_service": "service1",
       "instance_count": 1,
       "at": 60.0
+    },
+    {
+      "type": "summon_instance",
+      "target_service": "service1",
+      "instance_count": 1,
+      "at": 90.0
     }
   ],
   "policies": {

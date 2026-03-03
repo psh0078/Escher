@@ -123,3 +123,27 @@
 3. Add circuit-breaker state timeline CSV output (`CB[...]`).
 4. Add per-endpoint response time CSV (`R[<Endpoint>]_ResponseTimes.csv`).
 5. Add Escher-vs-MiSim comparison utility over CSV files.
+
+## 2026-03-03 Session Log
+
+### [13] Faultload extension: summon instance
+- Added first-class `summon_instance` handling in canonical `faultloads` parsing and scheduling.
+- Runner now supports both scale-down (`kill_instance`) and scale-up (`summon_instance`) events with timeline tracking.
+
+### [14] Metrics export extension
+- Added circuit breaker state timeline recording and export:
+  - `CB[global]_StateTimeline.csv`
+- Added per-endpoint response time recording and export:
+  - `R[<EndpointRef>]_ResponseTimes.csv`
+
+### [15] Escher-vs-MiSim CSV comparison utility
+- Added `analysis/metrics/comparison.py` with:
+  - directory-level CSV comparison
+  - tolerance-aware numeric value checks
+  - CLI entrypoint via `python -m analysis.metrics.comparison <escher_dir> <misim_dir>`
+
+### [16] Validation run status
+- Tests pass with:
+  - `python3 -m unittest discover -s tests`
+- Smoke run executes and now emits endpoint + circuit-breaker CSV artifacts.
+- Comparison utility validated against identical directories (`MATCH`).
