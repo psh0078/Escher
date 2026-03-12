@@ -147,3 +147,34 @@
   - `python3 -m unittest discover -s tests`
 - Smoke run executes and now emits endpoint + circuit-breaker CSV artifacts.
 - Comparison utility validated against identical directories (`MATCH`).
+
+---
+
+## 2026-03-12 Session Log
+
+### [A] Checkpoint A commit
+- Committed all uncommitted V1 work: validation improvements, benchmark runner,
+  BENCHMARK_STANDARD.md, STUDY_PLAN.md, .gitignore / README updates.
+- Commit: `30308c2`
+
+### [B] Per-instance modeling + load balancer wiring
+- Added `model/resources/service_instance.py`: `ServiceInstance` dataclass with
+  `service`, `instance_id`, `alive` fields.
+- `smoke_runner.py`: replaced bare `dict[str, int]` count tracking with
+  `dict[str, list[ServiceInstance]]`.
+  - Kill events: mark last N `alive=False`, remove from list, sync LB count.
+  - Summon events: append new instances with monotone IDs, sync LB count.
+  - `execute_operation()`: checks `not instances` (empty list) instead of `<= 0`.
+  - Load balancer wired: `RoundRobinLoadBalancer` per service; selects instance
+    index each call; cursor advances for round-robin distribution.
+- `tests/test_smoke_runner.py`: added two new tests:
+  - `test_kill_all_instances_causes_failures`: kill all instances → >15 failures,
+    instance count reaches 0.
+  - `test_kill_partial_instances_still_routes`: kill 2 of 3 → 0 failures, LB
+    routes all requests to the 1 remaining instance.
+- All 12 tests pass. Smoke run produces full artifact set unchanged.
+
+### Next steps
+- Wire autoscaler (now architecturally unblocked — instances are real objects).
+- Add per-instance circuit breakers (instead of single global breaker).
+- V1.1: resource contention / CPU queueing per instance.

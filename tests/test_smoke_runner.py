@@ -221,6 +221,93 @@ class SmokeRunnerTests(unittest.TestCase):
         self.assertEqual(result_a.failed, result_b.failed)
         self.assertEqual(result_a.latencies, result_b.latencies)
 
+    def test_kill_all_instances_causes_failures(self) -> None:
+        scenario = parse_canonical_config(
+            {
+                "simulation_metadata": {
+                    "name": "kill-all-test",
+                    "duration": 20.0,
+                    "seed": 7,
+                },
+                "services": [
+                    {
+                        "name": "gateway",
+                        "instances": 2,
+                        "operations": [{"name": "GET", "dependencies": []}],
+                    }
+                ],
+                "workloads": [
+                    {"type": "constant_rate", "target": "gateway.GET", "interval": 1.0}
+                ],
+                "faultloads": [
+                    {
+                        "type": "kill_instance",
+                        "target_service": "gateway",
+                        "instance_count": 2,
+                        "at": 1.5,
+                    }
+                ],
+                "policies": {
+                    "retry": {"max_attempts": 1},
+                    "circuit_breaker": {
+                        "failure_threshold": 1.0,
+                        "rolling_window": 60.0,
+                        "min_calls": 1000,
+                        "open_timeout": 1.0,
+                    },
+                    "connection_limiter": {"max_inflight": 100},
+                },
+            }
+        )
+        result = run_scenario(scenario)
+        # Kill fires at t=1.5; requests from t=2 onward (18 arrivals) all fail.
+        self.assertGreater(result.failed, 15)
+        # Instance count reaches zero after kill.
+        self.assertEqual(result.instance_count_log["gateway"][-1][1], 0)
+
+    def test_kill_partial_instances_still_routes(self) -> None:
+        scenario = parse_canonical_config(
+            {
+                "simulation_metadata": {
+                    "name": "kill-partial-test",
+                    "duration": 20.0,
+                    "seed": 5,
+                },
+                "services": [
+                    {
+                        "name": "gateway",
+                        "instances": 3,
+                        "operations": [{"name": "GET", "dependencies": []}],
+                    }
+                ],
+                "workloads": [
+                    {"type": "constant_rate", "target": "gateway.GET", "interval": 1.0}
+                ],
+                "faultloads": [
+                    {
+                        "type": "kill_instance",
+                        "target_service": "gateway",
+                        "instance_count": 2,
+                        "at": 5.0,
+                    }
+                ],
+                "policies": {
+                    "retry": {"max_attempts": 1},
+                    "circuit_breaker": {
+                        "failure_threshold": 1.0,
+                        "rolling_window": 60.0,
+                        "min_calls": 1000,
+                        "open_timeout": 1.0,
+                    },
+                    "connection_limiter": {"max_inflight": 100},
+                },
+            }
+        )
+        result = run_scenario(scenario)
+        # 1 instance remains after kill; load balancer routes all requests to it.
+        self.assertEqual(result.failed, 0)
+        self.assertEqual(result.instance_count_log["gateway"][-1][1], 1)
+
     def test_stress_more_than_100k_events(self) -> None:
         scenario = parse_canonical_config(
             {

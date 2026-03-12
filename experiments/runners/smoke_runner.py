@@ -12,8 +12,10 @@ from analysis.metrics.exporter import export_misim_compatible_csv
 from core.simpy_engine import SimPyEngine
 from model.resources.dependency import DependencyEndpoint
 from model.resources.service_graph import DependencySpec, OperationSpec, ServiceGraph
+from model.resources.service_instance import ServiceInstance
 from model.resilience.circuit_breaker import CircuitBreaker
 from model.resilience.connection_limiter import ConnectionLimiter
+from model.resilience.load_balancer import RoundRobinLoadBalancer
 from model.resilience.retry import RetryPolicy
 from model.rng import SeededRng
 from model.workloads.generators import ConstantRateWorkload
@@ -304,10 +306,21 @@ def run_scenario(scenario: SmokeScenario) -> MetricsCollector:
     engine = SimPyEngine()
     rng = SeededRng(seed=scenario.seed)
     metrics = MetricsCollector()
-    active_instances = dict(scenario.initial_instances)
 
-    for service_name, count in sorted(active_instances.items()):
-        metrics.record_instance_count(service_name, count, at_time=engine.now)
+    active_instances: dict[str, list[ServiceInstance]] = {
+        name: [ServiceInstance(service=name, instance_id=i) for i in range(count)]
+        for name, count in scenario.initial_instances.items()
+    }
+    _next_instance_ids: dict[str, int] = {
+        name: len(instances) for name, instances in active_instances.items()
+    }
+    load_balancers: dict[str, RoundRobinLoadBalancer] = {
+        name: RoundRobinLoadBalancer(instance_count=max(1, len(instances)))
+        for name, instances in active_instances.items()
+    }
+
+    for service_name, instances in sorted(active_instances.items()):
+        metrics.record_instance_count(service_name, len(instances), at_time=engine.now)
 
     retry_policy = RetryPolicy(max_attempts=scenario.retry_max_attempts)
     breaker = CircuitBreaker(
@@ -327,9 +340,15 @@ def run_scenario(scenario: SmokeScenario) -> MetricsCollector:
         def _apply_kill() -> None:
             if event.service not in active_instances:
                 return
-            new_count = max(0, active_instances[event.service] - event.instance_count)
-            active_instances[event.service] = new_count
-            metrics.record_instance_count(event.service, new_count, at_time=engine.now)
+            instances = active_instances[event.service]
+            to_kill = min(event.instance_count, len(instances))
+            for inst in instances[-to_kill:]:
+                inst.alive = False
+            del instances[-to_kill:]
+            lb = load_balancers.get(event.service)
+            if lb is not None:
+                lb.instance_count = max(1, len(instances))
+            metrics.record_instance_count(event.service, len(instances), at_time=engine.now)
 
         engine.schedule(event.at_time - engine.now, _apply_kill)
 
@@ -337,9 +356,16 @@ def run_scenario(scenario: SmokeScenario) -> MetricsCollector:
         def _apply_summon() -> None:
             if event.service not in active_instances:
                 return
-            new_count = active_instances[event.service] + max(0, event.instance_count)
-            active_instances[event.service] = new_count
-            metrics.record_instance_count(event.service, new_count, at_time=engine.now)
+            instances = active_instances[event.service]
+            count = max(0, event.instance_count)
+            next_id = _next_instance_ids.get(event.service, len(instances))
+            for i in range(count):
+                instances.append(ServiceInstance(service=event.service, instance_id=next_id + i))
+            _next_instance_ids[event.service] = next_id + count
+            lb = load_balancers.get(event.service)
+            if lb is not None:
+                lb.instance_count = max(1, len(instances))
+            metrics.record_instance_count(event.service, len(instances), at_time=engine.now)
 
         engine.schedule(event.at_time - engine.now, _apply_summon)
 
@@ -401,9 +427,14 @@ def run_scenario(scenario: SmokeScenario) -> MetricsCollector:
                 return
 
             operation = scenario.service_graph.get(operation_ref)
-            if active_instances.get(operation.service, 0) <= 0:
+            instances = active_instances.get(operation.service, [])
+            if not instances:
                 on_done(False)
                 return
+            lb = load_balancers.get(operation.service)
+            if lb is not None:
+                lb.instance_count = len(instances)
+                _selected = instances[lb.select()]  # route to specific instance; per-instance metrics in V1.1
             dependencies = operation.dependencies
             dep_index = 0
 
