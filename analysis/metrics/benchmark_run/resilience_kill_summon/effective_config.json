@@ -1,0 +1,92 @@
+{
+  "faultloads": [
+    {
+      "at": 60.0,
+      "instance_count": 1,
+      "target_service": "service1",
+      "type": "kill_instance"
+    },
+    {
+      "at": 90.0,
+      "instance_count": 1,
+      "target_service": "service1",
+      "type": "summon_instance"
+    }
+  ],
+  "policies": {
+    "circuit_breaker": {
+      "failure_threshold": 0.5,
+      "min_calls": 12,
+      "open_timeout": 3.0,
+      "rolling_window": 10.0
+    },
+    "connection_limiter": {
+      "max_inflight": 100
+    },
+    "retry": {
+      "base_backoff": 0.1,
+      "max_attempts": 3,
+      "max_backoff": 2.0,
+      "multiplier": 2.0
+    }
+  },
+  "services": [
+    {
+      "instances": 1,
+      "name": "gateway",
+      "operations": [
+        {
+          "dependencies": [
+            {
+              "failure_probability": 0.1,
+              "latency": 0.15,
+              "operation": "calc",
+              "service": "service1"
+            }
+          ],
+          "name": "GET"
+        }
+      ]
+    },
+    {
+      "instances": 2,
+      "name": "service1",
+      "operations": [
+        {
+          "dependencies": [
+            {
+              "failure_probability": 0.02,
+              "latency": 0.05,
+              "operation": "db_lookup",
+              "service": "service2"
+            }
+          ],
+          "name": "calc"
+        }
+      ]
+    },
+    {
+      "instances": 1,
+      "name": "service2",
+      "operations": [
+        {
+          "dependencies": [],
+          "name": "db_lookup"
+        }
+      ]
+    }
+  ],
+  "simulation_metadata": {
+    "duration": 120.0,
+    "name": "smoke-scenario",
+    "seed": 42,
+    "time_unit": "second"
+  },
+  "workloads": [
+    {
+      "interval": 0.5,
+      "target": "gateway.GET",
+      "type": "constant_rate"
+    }
+  ]
+}

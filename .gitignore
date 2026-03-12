@@ -27,3 +27,6 @@ htmlcov/
 
 # Local run artifacts
 analysis/metrics/smoke_run/
+
+# MiSim Eval Files
+analysis/misim_eval_examples/

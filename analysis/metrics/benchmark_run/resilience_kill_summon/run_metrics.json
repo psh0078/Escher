@@ -1,0 +1,9 @@
+{
+  "completed": 240.0,
+  "failed": 0.0,
+  "p50_latency": 0.20000000000000284,
+  "p95_latency": 0.45000000000000107,
+  "p99_latency": 0.6000000000000014,
+  "success_rate": 1.0,
+  "time_unit": "second"
+}

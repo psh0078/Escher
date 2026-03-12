@@ -6,6 +6,93 @@ from experiments.runners.smoke_runner import parse_canonical_config, run_scenari
 
 
 class SmokeRunnerTests(unittest.TestCase):
+    def test_rejects_negative_duration_and_interval(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_canonical_config(
+                {
+                    "simulation_metadata": {"duration": -1.0, "seed": 1},
+                    "services": [
+                        {
+                            "name": "gateway",
+                            "operations": [{"name": "GET", "dependencies": []}],
+                        }
+                    ],
+                    "workloads": [
+                        {
+                            "type": "constant_rate",
+                            "target": "gateway.GET",
+                            "interval": 1.0,
+                        }
+                    ],
+                    "faultloads": [],
+                    "policies": {},
+                }
+            )
+
+        with self.assertRaises(ValueError):
+            parse_canonical_config(
+                {
+                    "simulation_metadata": {"duration": 1.0, "seed": 1},
+                    "services": [
+                        {
+                            "name": "gateway",
+                            "operations": [{"name": "GET", "dependencies": []}],
+                        }
+                    ],
+                    "workloads": [
+                        {
+                            "type": "constant_rate",
+                            "target": "gateway.GET",
+                            "interval": 0.0,
+                        }
+                    ],
+                    "faultloads": [],
+                    "policies": {},
+                }
+            )
+
+    def test_rejects_invalid_faultload_timings(self) -> None:
+        with self.assertRaises(ValueError):
+            parse_canonical_config(
+                {
+                    "simulation_metadata": {"duration": 10.0, "seed": 1},
+                    "services": [
+                        {
+                            "name": "gateway",
+                            "operations": [
+                                {
+                                    "name": "GET",
+                                    "dependencies": [
+                                        {"service": "service1", "operation": "calc"}
+                                    ],
+                                }
+                            ],
+                        },
+                        {
+                            "name": "service1",
+                            "operations": [{"name": "calc", "dependencies": []}],
+                        },
+                    ],
+                    "workloads": [
+                        {
+                            "type": "constant_rate",
+                            "target": "gateway.GET",
+                            "interval": 1.0,
+                        }
+                    ],
+                    "faultloads": [
+                        {
+                            "type": "delay_injection",
+                            "target": "service1.calc",
+                            "start": 5.0,
+                            "end": 4.0,
+                            "latency": 0.1,
+                        }
+                    ],
+                    "policies": {},
+                }
+            )
+
     def test_kill_and_summon_instance_faultloads_update_timeline(self) -> None:
         scenario = parse_canonical_config(
             {

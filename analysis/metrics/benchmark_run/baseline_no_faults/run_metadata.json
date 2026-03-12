@@ -1,0 +1,6 @@
+{
+  "config_hash": "f98a0c1d8ab5334a4bcee8be71f577ffc458af21e26e76068f2a0353fe619861",
+  "config_path": "analysis/metrics/benchmark_run/baseline_no_faults/effective_config.json",
+  "git_commit_hash": "f8419148e31aa59099ea9031f95281f4d53932a7",
+  "seed": 42
+}

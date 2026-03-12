@@ -53,6 +53,9 @@ class SmokeScenario:
     time_unit: str = "second"
 
 
+RunResult = dict[str, float | str]
+
+
 def load_scenario(path: Path) -> SmokeScenario:
     payload = json.loads(path.read_text(encoding="utf-8"))
     return parse_canonical_config(payload)
@@ -65,6 +68,9 @@ def parse_canonical_config(payload: dict[str, Any]) -> SmokeScenario:
         raise ValueError("simulation_metadata must be an object")
 
     duration = _required_float(metadata, "duration")
+    if duration < 0:
+        raise ValueError("simulation_metadata.duration must be >= 0")
+
     seed = _required_int(metadata, "seed")
     time_unit = str(metadata.get("time_unit", "second"))
 
@@ -75,6 +81,9 @@ def parse_canonical_config(payload: dict[str, Any]) -> SmokeScenario:
     if constant is None:
         raise ValueError("At least one constant_rate workload is required")
     request_interval = _required_float(constant, "interval")
+    if request_interval <= 0:
+        raise ValueError("workloads.constant_rate.interval must be > 0")
+
     target_operation_ref = _required_str(constant, "target")
 
     policies = payload.get("policies", {})
@@ -139,9 +148,7 @@ def _required_str(payload: dict[str, Any], key: str) -> str:
 
 
 def _parse_delay_injections(payload: dict[str, Any]) -> dict[str, dict[str, float]]:
-    faultloads = payload.get("faultloads", [])
-    if not isinstance(faultloads, list):
-        raise ValueError("faultloads must be a list")
+    faultloads = _parse_faultloads(payload)
     injections: dict[str, dict[str, float]] = {}
     for faultload in faultloads:
         if not isinstance(faultload, dict):
@@ -149,11 +156,17 @@ def _parse_delay_injections(payload: dict[str, Any]) -> dict[str, dict[str, floa
         if faultload.get("type") != "delay_injection":
             continue
         target = _required_str(faultload, "target")
-        injections[target] = {
-            "start": float(faultload.get("start", 0.0)),
-            "end": float(faultload.get("end", 0.0)),
-            "latency": float(faultload.get("latency", 0.0)),
-        }
+        start = float(faultload.get("start", 0.0))
+        end = float(faultload.get("end", 0.0))
+        latency = float(faultload.get("latency", 0.0))
+        if start < 0 or end < 0:
+            raise ValueError("delay_injection start/end must be >= 0")
+        if end < start:
+            raise ValueError("delay_injection end must be >= start")
+        if latency < 0:
+            raise ValueError("delay_injection latency must be >= 0")
+
+        injections[target] = {"start": start, "end": end, "latency": latency}
     return injections
 
 
@@ -175,9 +188,7 @@ def _parse_initial_instances(payload: dict[str, Any]) -> dict[str, int]:
 
 
 def _parse_kill_events(payload: dict[str, Any]) -> tuple[KillEvent, ...]:
-    faultloads = payload.get("faultloads", [])
-    if not isinstance(faultloads, list):
-        raise ValueError("faultloads must be a list")
+    faultloads = _parse_faultloads(payload)
 
     events: list[KillEvent] = []
     for faultload in faultloads:
@@ -186,11 +197,18 @@ def _parse_kill_events(payload: dict[str, Any]) -> tuple[KillEvent, ...]:
         if faultload.get("type") != "kill_instance":
             continue
 
+        instance_count = int(faultload.get("instance_count", 1))
+        at_time = float(faultload.get("at", 0.0))
+        if instance_count < 0:
+            raise ValueError("kill_instance instance_count must be >= 0")
+        if at_time < 0:
+            raise ValueError("kill_instance at must be >= 0")
+
         events.append(
             KillEvent(
                 service=_required_str(faultload, "target_service"),
-                instance_count=int(faultload.get("instance_count", 1)),
-                at_time=float(faultload.get("at", 0.0)),
+                instance_count=instance_count,
+                at_time=at_time,
             )
         )
 
@@ -198,9 +216,7 @@ def _parse_kill_events(payload: dict[str, Any]) -> tuple[KillEvent, ...]:
 
 
 def _parse_summon_events(payload: dict[str, Any]) -> tuple[SummonEvent, ...]:
-    faultloads = payload.get("faultloads", [])
-    if not isinstance(faultloads, list):
-        raise ValueError("faultloads must be a list")
+    faultloads = _parse_faultloads(payload)
 
     events: list[SummonEvent] = []
     for faultload in faultloads:
@@ -209,15 +225,29 @@ def _parse_summon_events(payload: dict[str, Any]) -> tuple[SummonEvent, ...]:
         if faultload.get("type") != "summon_instance":
             continue
 
+        instance_count = int(faultload.get("instance_count", 1))
+        at_time = float(faultload.get("at", 0.0))
+        if instance_count < 0:
+            raise ValueError("summon_instance instance_count must be >= 0")
+        if at_time < 0:
+            raise ValueError("summon_instance at must be >= 0")
+
         events.append(
             SummonEvent(
                 service=_required_str(faultload, "target_service"),
-                instance_count=int(faultload.get("instance_count", 1)),
-                at_time=float(faultload.get("at", 0.0)),
+                instance_count=instance_count,
+                at_time=at_time,
             )
         )
 
     return tuple(sorted(events, key=lambda event: event.at_time))
+
+
+def _parse_faultloads(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    faultloads = payload.get("faultloads", [])
+    if not isinstance(faultloads, list):
+        raise ValueError("faultloads must be a list")
+    return [faultload for faultload in faultloads if isinstance(faultload, dict)]
 
 
 def _build_service_graph(payload: dict[str, Any]) -> ServiceGraph:
@@ -354,12 +384,7 @@ def run_scenario(scenario: SmokeScenario) -> MetricsCollector:
         endpoint_cache[key] = endpoint
         return endpoint
 
-    request_id = 0
-
     def on_arrival(created_at: float) -> None:
-        nonlocal request_id
-        request_id += 1
-
         if not limiter.try_acquire():
             metrics.record(
                 success=False, latency=engine.now - created_at, completed_at=engine.now
@@ -461,9 +486,7 @@ def run_scenario(scenario: SmokeScenario) -> MetricsCollector:
     return metrics
 
 
-def run_from_config(path: Path) -> dict[str, float | str]:
-    scenario = load_scenario(path)
-    metrics = run_scenario(scenario)
+def summarize_metrics(metrics: MetricsCollector, *, time_unit: str) -> RunResult:
     return {
         "completed": float(metrics.completed),
         "failed": float(metrics.failed),
@@ -471,8 +494,14 @@ def run_from_config(path: Path) -> dict[str, float | str]:
         "p50_latency": metrics.percentile(0.50),
         "p95_latency": metrics.percentile(0.95),
         "p99_latency": metrics.percentile(0.99),
-        "time_unit": scenario.time_unit,
+        "time_unit": time_unit,
     }
+
+
+def run_from_config(path: Path) -> RunResult:
+    scenario = load_scenario(path)
+    metrics = run_scenario(scenario)
+    return summarize_metrics(metrics, time_unit=scenario.time_unit)
 
 
 def compute_config_hash(path: Path) -> str:
@@ -497,7 +526,7 @@ def get_git_commit_hash(repo_root: Path) -> str:
 def write_run_artifacts(
     *,
     config_path: Path,
-    result: dict[str, float | str],
+    result: RunResult,
     output_dir: Path,
     seed: int,
 ) -> tuple[Path, Path]:
@@ -523,7 +552,7 @@ def write_run_artifacts(
     return metadata_path, metrics_path
 
 
-def format_human_summary(result: dict[str, float | str], unit: str = "STU") -> str:
+def format_human_summary(result: RunResult, unit: str = "STU") -> str:
     completed = int(float(result["completed"]))
     failed = int(float(result["failed"]))
     success_rate_pct = float(result["success_rate"]) * 100.0
@@ -547,15 +576,7 @@ if __name__ == "__main__":
     config = Path("experiments/configs/smoke_scenario.json")
     scenario = load_scenario(config)
     metrics = run_scenario(scenario)
-    result = {
-        "completed": float(metrics.completed),
-        "failed": float(metrics.failed),
-        "success_rate": metrics.success_rate,
-        "p50_latency": metrics.percentile(0.50),
-        "p95_latency": metrics.percentile(0.95),
-        "p99_latency": metrics.percentile(0.99),
-        "time_unit": scenario.time_unit,
-    }
+    result = summarize_metrics(metrics, time_unit=scenario.time_unit)
     artifacts_dir = Path("analysis/metrics/smoke_run")
     metadata_path, metrics_path = write_run_artifacts(
         config_path=config,

@@ -1,0 +1,108 @@
+{
+  "cases": [
+    {
+      "comparison": null,
+      "csv_artifacts": [
+        "analysis/metrics/benchmark_run/baseline_no_faults/GEN_ALL_SuccessfulRequests.csv",
+        "analysis/metrics/benchmark_run/baseline_no_faults/GEN_ALL_FailedRequests.csv",
+        "analysis/metrics/benchmark_run/baseline_no_faults/R[All]_ResponseTimes.csv",
+        "analysis/metrics/benchmark_run/baseline_no_faults/R[service1.calc]_ResponseTimes.csv",
+        "analysis/metrics/benchmark_run/baseline_no_faults/R[service2.db_lookup]_ResponseTimes.csv",
+        "analysis/metrics/benchmark_run/baseline_no_faults/S[gateway]_InstanceCount.csv",
+        "analysis/metrics/benchmark_run/baseline_no_faults/S[service1]_InstanceCount.csv",
+        "analysis/metrics/benchmark_run/baseline_no_faults/S[service2]_InstanceCount.csv",
+        "analysis/metrics/benchmark_run/baseline_no_faults/CB[global]_StateTimeline.csv"
+      ],
+      "determinism_repeats": 2,
+      "deterministic": true,
+      "human_summary": "Run Summary\n- Requests completed: 240\n- Requests failed: 0 (0.00%)\n- Success rate: 100.00%\n- Time unit mapping: 1 STU = 1 second\n- Latency p50: 0.200 STU\n- Latency p95: 0.450 STU\n- Latency p99: 0.600 STU",
+      "name": "baseline_no_faults",
+      "runtime_seconds": [
+        0.0066728750243783,
+        0.00675970793236047
+      ],
+      "summary": {
+        "completed": 240.0,
+        "failed": 0.0,
+        "p50_latency": 0.20000000000000284,
+        "p95_latency": 0.45000000000000107,
+        "p99_latency": 0.6000000000000014,
+        "success_rate": 1.0,
+        "time_unit": "second"
+      },
+      "throughput_rps": [
+        35966.50605971155,
+        35504.49256114424
+      ]
+    },
+    {
+      "comparison": null,
+      "csv_artifacts": [
+        "analysis/metrics/benchmark_run/resilience_kill_summon/GEN_ALL_SuccessfulRequests.csv",
+        "analysis/metrics/benchmark_run/resilience_kill_summon/GEN_ALL_FailedRequests.csv",
+        "analysis/metrics/benchmark_run/resilience_kill_summon/R[All]_ResponseTimes.csv",
+        "analysis/metrics/benchmark_run/resilience_kill_summon/R[service1.calc]_ResponseTimes.csv",
+        "analysis/metrics/benchmark_run/resilience_kill_summon/R[service2.db_lookup]_ResponseTimes.csv",
+        "analysis/metrics/benchmark_run/resilience_kill_summon/S[gateway]_InstanceCount.csv",
+        "analysis/metrics/benchmark_run/resilience_kill_summon/S[service1]_InstanceCount.csv",
+        "analysis/metrics/benchmark_run/resilience_kill_summon/S[service2]_InstanceCount.csv",
+        "analysis/metrics/benchmark_run/resilience_kill_summon/CB[global]_StateTimeline.csv"
+      ],
+      "determinism_repeats": 2,
+      "deterministic": true,
+      "human_summary": "Run Summary\n- Requests completed: 240\n- Requests failed: 0 (0.00%)\n- Success rate: 100.00%\n- Time unit mapping: 1 STU = 1 second\n- Latency p50: 0.200 STU\n- Latency p95: 0.450 STU\n- Latency p99: 0.600 STU",
+      "name": "resilience_kill_summon",
+      "runtime_seconds": [
+        0.006578291999176145,
+        0.006539209047332406
+      ],
+      "summary": {
+        "completed": 240.0,
+        "failed": 0.0,
+        "p50_latency": 0.20000000000000284,
+        "p95_latency": 0.45000000000000107,
+        "p99_latency": 0.6000000000000014,
+        "success_rate": 1.0,
+        "time_unit": "second"
+      },
+      "throughput_rps": [
+        36483.63435828894,
+        36701.68643681841
+      ]
+    },
+    {
+      "comparison": null,
+      "csv_artifacts": [
+        "analysis/metrics/benchmark_run/scalability_100k/GEN_ALL_SuccessfulRequests.csv",
+        "analysis/metrics/benchmark_run/scalability_100k/GEN_ALL_FailedRequests.csv",
+        "analysis/metrics/benchmark_run/scalability_100k/R[All]_ResponseTimes.csv",
+        "analysis/metrics/benchmark_run/scalability_100k/R[service1.calc]_ResponseTimes.csv",
+        "analysis/metrics/benchmark_run/scalability_100k/R[service2.db_lookup]_ResponseTimes.csv",
+        "analysis/metrics/benchmark_run/scalability_100k/S[gateway]_InstanceCount.csv",
+        "analysis/metrics/benchmark_run/scalability_100k/S[service1]_InstanceCount.csv",
+        "analysis/metrics/benchmark_run/scalability_100k/S[service2]_InstanceCount.csv",
+        "analysis/metrics/benchmark_run/scalability_100k/CB[global]_StateTimeline.csv"
+      ],
+      "determinism_repeats": 1,
+      "deterministic": true,
+      "human_summary": "Run Summary\n- Requests completed: 124501\n- Requests failed: 0 (0.00%)\n- Success rate: 100.00%\n- Time unit mapping: 1 STU = 1 second\n- Latency p50: 0.200 STU\n- Latency p95: 0.200 STU\n- Latency p99: 0.200 STU",
+      "name": "scalability_100k",
+      "runtime_seconds": [
+        9.39922529202886
+      ],
+      "summary": {
+        "completed": 124501.0,
+        "failed": 0.0,
+        "p50_latency": 0.1999999999999993,
+        "p95_latency": 0.20000000000000107,
+        "p99_latency": 0.20000000000000107,
+        "success_rate": 1.0,
+        "time_unit": "second"
+      },
+      "throughput_rps": [
+        13245.878902975628
+      ]
+    }
+  ],
+  "suite_name": "escher-default-benchmark"
+}

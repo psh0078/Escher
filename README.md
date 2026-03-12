@@ -27,6 +27,12 @@ The default runner reads `experiments/configs/smoke_scenario.json` using the can
 
 Latency values are reported in simulation time units (STU). Configure `simulation_metadata.time_unit` to declare the mapping, e.g., `1 STU = 1 second`.
 
+Escher benchmark standards are documented in `BENCHMARK_STANDARD.md`. Run the default benchmark suite with:
+
+```bash
+python -m experiments.runners.benchmark_runner
+```
+
 Each run writes reproducibility artifacts to `analysis/metrics/smoke_run/`:
 
 - `run_metadata.json` with seed, config hash, and git commit hash

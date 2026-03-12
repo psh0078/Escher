@@ -1,0 +1,114 @@
+{
+  "suite_name": "escher-default-benchmark",
+  "output_dir": "analysis/metrics/benchmark_run",
+  "cases": [
+    {
+      "name": "baseline_no_faults",
+      "config_path": "experiments/configs/smoke_scenario.json",
+      "determinism_repeats": 2,
+      "overrides": {
+        "faultloads": []
+      }
+    },
+    {
+      "name": "resilience_kill_summon",
+      "config_path": "experiments/configs/smoke_scenario.json",
+      "determinism_repeats": 2,
+      "overrides": {
+        "faultloads": [
+          {
+            "type": "kill_instance",
+            "target_service": "service1",
+            "instance_count": 1,
+            "at": 60.0
+          },
+          {
+            "type": "summon_instance",
+            "target_service": "service1",
+            "instance_count": 1,
+            "at": 90.0
+          }
+        ]
+      }
+    },
+    {
+      "name": "scalability_100k",
+      "config_path": "experiments/configs/smoke_scenario.json",
+      "determinism_repeats": 1,
+      "overrides": {
+        "simulation_metadata": {
+          "duration": 50.0,
+          "seed": 404
+        },
+        "services": [
+          {
+            "name": "gateway",
+            "instances": 1,
+            "operations": [
+              {
+                "name": "GET",
+                "dependencies": [
+                  {
+                    "service": "service1",
+                    "operation": "calc",
+                    "failure_probability": 0.0,
+                    "latency": 0.15
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "service1",
+            "instances": 2,
+            "operations": [
+              {
+                "name": "calc",
+                "dependencies": [
+                  {
+                    "service": "service2",
+                    "operation": "db_lookup",
+                    "failure_probability": 0.0,
+                    "latency": 0.05
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "service2",
+            "instances": 1,
+            "operations": [
+              {
+                "name": "db_lookup",
+                "dependencies": []
+              }
+            ]
+          }
+        ],
+        "workloads": [
+          {
+            "type": "constant_rate",
+            "target": "gateway.GET",
+            "interval": 0.0004
+          }
+        ],
+        "faultloads": [],
+        "policies": {
+          "retry": {
+            "max_attempts": 1
+          },
+          "circuit_breaker": {
+            "failure_threshold": 2.0,
+            "rolling_window": 10.0,
+            "min_calls": 1000000000,
+            "open_timeout": 3.0
+          },
+          "connection_limiter": {
+            "max_inflight": 1000000
+          }
+        }
+      }
+    }
+  ]
+}
